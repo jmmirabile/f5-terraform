@@ -17,6 +17,7 @@ Usage:
 
 import csv
 import argparse
+import getpass
 import os
 import subprocess
 from pathlib import Path
@@ -58,9 +59,15 @@ def resolve_bigip_address(device_name: str, explicit_address: str = None) -> str
 def parse_csv_row(row: dict, partition: str, irules_dir: Path) -> dict:
     """Parse a CSV row and prepare context for Jinja2 template."""
     # Parse pool members (format: ip:port,ip:port)
-    pool_members = []
+    pool_members_parsed = []
     if row.get('pool_members'):
-        pool_members = [m.strip() for m in row['pool_members'].split(',') if m.strip()]
+        for member in row['pool_members'].split(','):
+            member = member.strip()
+            if ':' in member:
+                ip, port = member.rsplit(':', 1)
+                pool_members_parsed.append({'ip': ip, 'port': port})
+            elif member:
+                pool_members_parsed.append({'ip': member, 'port': '80'})
 
     # Build profile lists
     client_profiles = []
@@ -110,7 +117,7 @@ def parse_csv_row(row: dict, partition: str, irules_dir: Path) -> dict:
         'vip_address': row['vip_address'],
         'port': row['port'],
         'hostname': row.get('hostname', ''),
-        'pool_members': pool_members,
+        'pool_members_parsed': pool_members_parsed,
         'pool_monitor': row.get('pool_monitor', ''),
         'snatpool': row.get('snatpool', ''),
         'client_profiles': client_profiles,

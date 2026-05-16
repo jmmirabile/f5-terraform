@@ -10,6 +10,20 @@ EOF
 }
 
 {% endfor %}
+{% if snatpool %}
+resource "bigip_ltm_snatpool" "{{ vip_name }}_snatpool" {
+  name    = "/{{ partition }}/{{ snatpool }}"
+  members = ["/{{ partition }}/{{ vip_address }}"]
+}
+
+{% endif %}
+{% for member in pool_members_parsed %}
+resource "bigip_ltm_node" "{{ vip_name }}_node_{{ loop.index0 }}" {
+  name    = "/{{ partition }}/{{ member.ip }}"
+  address = "{{ member.ip }}"
+}
+
+{% endfor %}
 resource "bigip_ltm_pool" "{{ vip_name }}_pool" {
   name                = "/{{ partition }}/{{ vip_name }}_pool"
   load_balancing_mode = "round-robin"
@@ -18,10 +32,10 @@ resource "bigip_ltm_pool" "{{ vip_name }}_pool" {
 {% endif %}
 }
 
-{% for member in pool_members %}
+{% for member in pool_members_parsed %}
 resource "bigip_ltm_pool_attachment" "{{ vip_name }}_member_{{ loop.index0 }}" {
   pool = bigip_ltm_pool.{{ vip_name }}_pool.name
-  node = "/{{ partition }}/{{ member }}"
+  node = "${bigip_ltm_node.{{ vip_name }}_node_{{ loop.index0 }}.name}:{{ member.port }}"
 }
 
 {% endfor %}
@@ -42,7 +56,7 @@ resource "bigip_ltm_virtual_server" "{{ vip_name }}_vs" {
 {% endif %}
 {% if snatpool %}
   source_address_translation = "snat"
-  snatpool = "/{{ partition }}/{{ snatpool }}"
+  snatpool = bigip_ltm_snatpool.{{ vip_name }}_snatpool.name
 {% else %}
   source_address_translation = "automap"
 {% endif %}
