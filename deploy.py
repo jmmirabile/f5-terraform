@@ -55,7 +55,7 @@ def resolve_bigip_address(device_name: str, explicit_address: str = None) -> str
     return fqdn
 
 
-def parse_csv_row(row: dict, partition: str) -> dict:
+def parse_csv_row(row: dict, partition: str, irules_dir: Path) -> dict:
     """Parse a CSV row and prepare context for Jinja2 template."""
     # Parse pool members (format: ip:port,ip:port)
     pool_members = []
@@ -83,11 +83,26 @@ def parse_csv_row(row: dict, partition: str) -> dict:
     if row.get('port') == '443':
         profiles.append('/Common/http')
 
-    # Build iRules list (ordered)
-    irules = []
+    # Build iRules - check if file exists locally or assume it's on the F5
+    managed_irules = []  # iRules with local .tcl files (will be created by TF)
+    irule_refs = []      # References for the VIP (TF resource ref or static path)
+
     for irule_field in ['irule1', 'irule2', 'irule3']:
-        if row.get(irule_field):
-            irules.append(f"/{partition}/{row[irule_field]}")
+        irule_name = row.get(irule_field, '').strip()
+        if not irule_name:
+            continue
+
+        # Check if iRule file exists locally
+        irule_file = irules_dir / f"{irule_name}.tcl"
+        if irule_file.exists():
+            # Read iRule content and add to managed list
+            content = irule_file.read_text()
+            managed_irules.append({'name': irule_name, 'content': content})
+            # Reference the TF resource
+            irule_refs.append(f'bigip_ltm_irule.{irule_name}.name')
+        else:
+            # Assume it exists on the F5, use static path
+            irule_refs.append(f'"/{partition}/{irule_name}"')
 
     return {
         'partition': partition,
@@ -101,7 +116,8 @@ def parse_csv_row(row: dict, partition: str) -> dict:
         'client_profiles': client_profiles,
         'server_profiles': server_profiles,
         'profiles': profiles,
-        'irules': irules,
+        'managed_irules': managed_irules,
+        'irule_refs': irule_refs,
     }
 
 
@@ -160,12 +176,15 @@ def main():
     )
     template = env.get_template(template_path.name)
 
+    # iRules directory (looks for .tcl files)
+    irules_dir = output_dir / 'irules'
+
     # Process CSV
     with open(csv_path, newline='') as f:
         reader = csv.DictReader(f)
 
         for row in reader:
-            context = parse_csv_row(row, args.partition)
+            context = parse_csv_row(row, args.partition, irules_dir)
             tf_content = template.render(**context)
 
             output_file = output_dir / f"{context['vip_name']}.tf"

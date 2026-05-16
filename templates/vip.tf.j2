@@ -1,6 +1,15 @@
 # Terraform configuration for VIP: {{ vip_name }}
 # Generated from CSV - do not edit manually
 
+{% for irule in managed_irules %}
+resource "bigip_ltm_irule" "{{ irule.name }}" {
+  name    = "/{{ partition }}/{{ irule.name }}"
+  irule   = <<-EOF
+{{ irule.content }}
+EOF
+}
+
+{% endfor %}
 resource "bigip_ltm_pool" "{{ vip_name }}_pool" {
   name                = "/{{ partition }}/{{ vip_name }}_pool"
   load_balancing_mode = "round-robin"
@@ -37,8 +46,8 @@ resource "bigip_ltm_virtual_server" "{{ vip_name }}_vs" {
 {% else %}
   source_address_translation = "automap"
 {% endif %}
-{% if irules %}
-  irules = [{% for r in irules %}"{{ r }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+{% if irule_refs %}
+  irules = [{% for r in irule_refs %}{{ r }}{% if not loop.last %}, {% endif %}{% endfor %}]
 {% endif %}
   state   = "enabled"
   enabled = true
