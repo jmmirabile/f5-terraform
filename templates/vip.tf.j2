@@ -1,0 +1,45 @@
+# Terraform configuration for VIP: {{ vip_name }}
+# Generated from CSV - do not edit manually
+
+resource "bigip_ltm_pool" "{{ vip_name }}_pool" {
+  name                = "/{{ partition }}/{{ vip_name }}_pool"
+  load_balancing_mode = "round-robin"
+{% if pool_monitor %}
+  monitors            = ["/{{ partition }}/{{ pool_monitor }}"]
+{% endif %}
+}
+
+{% for member in pool_members %}
+resource "bigip_ltm_pool_attachment" "{{ vip_name }}_member_{{ loop.index0 }}" {
+  pool = bigip_ltm_pool.{{ vip_name }}_pool.name
+  node = "/{{ partition }}/{{ member }}"
+}
+
+{% endfor %}
+resource "bigip_ltm_virtual_server" "{{ vip_name }}_vs" {
+  name        = "/{{ partition }}/{{ vip_name }}_vs"
+  destination = "{{ vip_address }}"
+  port        = {{ port }}
+  pool        = bigip_ltm_pool.{{ vip_name }}_pool.name
+  ip_protocol = "tcp"
+{% if client_profiles %}
+  client_profiles = [{% for p in client_profiles %}"{{ p }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+{% endif %}
+{% if server_profiles %}
+  server_profiles = [{% for p in server_profiles %}"{{ p }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+{% endif %}
+{% if profiles %}
+  profiles = [{% for p in profiles %}"{{ p }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+{% endif %}
+{% if snatpool %}
+  source_address_translation = "snat"
+  snatpool = "/{{ partition }}/{{ snatpool }}"
+{% else %}
+  source_address_translation = "automap"
+{% endif %}
+{% if irules %}
+  irules = [{% for r in irules %}"{{ r }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+{% endif %}
+  state   = "enabled"
+  enabled = true
+}

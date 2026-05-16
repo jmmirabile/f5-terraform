@@ -1,0 +1,4 @@
+vip_name,vip_address,port,hostname,pool_members,snatpool,irule1,irule2,irule3,pool_monitor,tcp_profile,serverssl_profile
+my_web_app,10.100.1.100,443,www.example.com,"10.0.1.10:8080,10.0.1.11:8080,10.0.1.12:8443",web_snatpool,redirect_http,insert_headers,,http_monitor,tcp-wan-optimized,serverssl-insecure-compatible
+api_service,10.100.1.101,443,api.example.com,"10.0.1.20:8443,10.0.1.21:8443",api_snatpool,api_logging,,,https_monitor,tcp-wan-optimized,
+internal_app,10.100.1.102,8080,,"10.0.1.30:8000,10.0.1.31:8000",internal_snat,,,,tcp_monitor,tcp-lan-optimized,
